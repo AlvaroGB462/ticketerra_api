@@ -14,92 +14,70 @@ import com.poyecto.ticketerra_api.repositorio.UsuarioRepositorio;
 @Service
 public class UsuarioServicio {
 
-    @Autowired
-    private UsuarioRepositorio usuarioRepository;
+    private final UsuarioRepositorio usuarioRepositorio;
+    private final JavaMailSender mailSender;
 
     @Autowired
-    private JavaMailSender mailSender;
+    public UsuarioServicio(UsuarioRepositorio usuarioRepositorio, JavaMailSender mailSender) {
+        this.usuarioRepositorio = usuarioRepositorio;
+        this.mailSender = mailSender;
+    }
 
     public void registrarUsuario(String nombreCompleto, String correo, String telefono, String codigoPostal, String contrasena) {
-        if (usuarioRepository.findByCorreo(correo).isPresent()) {
-            throw new IllegalArgumentException("El correo ya está registrado");
-        }
-
-        String contrasenaHasheada = hashPassword(contrasena);
-        Usuario nuevoUsuario = new Usuario();
-        nuevoUsuario.setNombreCompleto(nombreCompleto);
-        nuevoUsuario.setCorreo(correo);
-        nuevoUsuario.setTelefono(telefono);
-        nuevoUsuario.setCodigoPostal(codigoPostal);
-        nuevoUsuario.setContrasena(contrasenaHasheada);
-
-        usuarioRepository.save(nuevoUsuario);
+        String hashedPassword = BCrypt.hashpw(contrasena, BCrypt.gensalt());
+        Usuario usuario = new Usuario(nombreCompleto, correo, telefono, codigoPostal, hashedPassword);
+        usuarioRepositorio.save(usuario);
     }
 
-    public String hashPassword(String password) {
-        return BCrypt.hashpw(password, BCrypt.gensalt());
-    }
-
-    public boolean loginUsuario(String correo, String contrasena) {
-        Usuario usuario = usuarioRepository.findByCorreo(correo).orElse(null);
-        return usuario != null && BCrypt.checkpw(contrasena, usuario.getContrasena());
+    public boolean compararContrasena(String contrasena, String contrasenaHasheada) {
+        return BCrypt.checkpw(contrasena, contrasenaHasheada);
     }
 
     public Usuario buscarUsuarioPorCorreo(String correo) {
-        return usuarioRepository.findByCorreo(correo).orElse(null);
-    }
-
-    public Usuario buscarUsuarioPorToken(String token) {
-        return usuarioRepository.findByTokenRecuperacion(token).orElse(null);
-    }
-
-    private boolean enviarCorreoRecuperacion(String correo, String token) {
-        try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setTo(correo);
-            message.setSubject("Recuperación de contraseña - Ticketerra");
-            message.setText("Haz clic en el siguiente enlace para recuperar tu contraseña: \n"
-                    + "http://localhost:8080/api/usuarios/restablecer?token=" + token);
-            mailSender.send(message);
-            return true;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-        }
+        return usuarioRepositorio.findByCorreo(correo);
     }
 
     public boolean enviarTokenRecuperacion(String correo) {
-        Usuario usuario = usuarioRepository.findByCorreo(correo).orElse(null);
-
+        Usuario usuario = usuarioRepositorio.findByCorreo(correo);
         if (usuario == null) {
-            return false; // Si no se encuentra el usuario
+            return false;
         }
 
-        String token = UUID.randomUUID().toString(); // Generar un token único
-
-        // Guardamos el token en la base de datos
+        String token = UUID.randomUUID().toString();
         usuario.setTokenRecuperacion(token);
-        usuario.setTokenExpiracion(System.currentTimeMillis() + 3600000); // Expiración en 1 hora
-        usuarioRepository.save(usuario);
+        usuario.setTokenExpiracion(System.currentTimeMillis() + 3600000); // 1 hora
+        usuarioRepositorio.save(usuario);
 
-        // Enviar correo con el token
-        return enviarCorreoRecuperacion(correo, token);
+        // Enviar correo de recuperación
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(correo);
+        message.setSubject("Recuperación de contraseña");
+        message.setText("Haz clic en el siguiente enlace para restablecer tu contraseña:\n" +
+                "http://localhost:9094/usuarios/restablecer?token=" + token);
+        mailSender.send(message);
+
+        return true;
     }
 
-
-    public void actualizarUsuario(Usuario usuario) {
-        usuarioRepository.save(usuario);
+    public Usuario buscarUsuarioPorToken(String token) {
+        return usuarioRepositorio.findByTokenRecuperacion(token);
     }
-    
- // Método para confirmar el registro
+
+    public void restablecerContrasena(Usuario usuario, String nuevaContrasena) {
+        // Asegúrate de que la nueva contraseña se cifre antes de guardarla
+        String hashedPassword = BCrypt.hashpw(nuevaContrasena, BCrypt.gensalt());
+        usuario.setContrasena(hashedPassword);
+        usuarioRepositorio.save(usuario);
+    }
+
     public boolean confirmarRegistro(String token) {
-        Usuario usuario = usuarioRepository.findByTokenConfirmacion(token).orElse(null);
-
-        if (usuario != null) {
-            usuario.setActivo(true); // Activar el usuario
-            usuarioRepository.save(usuario); // Guardar cambios
-            return true;
+        Usuario usuario = usuarioRepositorio.findByTokenConfirmacion(token);
+        if (usuario == null || usuario.getTokenExpiracion() < System.currentTimeMillis()) {
+            return false;
         }
-        return false;
+
+        usuario.setConfirmado(true);  // Confirmación del registro
+        usuarioRepositorio.save(usuario);
+        return true;
     }
 }

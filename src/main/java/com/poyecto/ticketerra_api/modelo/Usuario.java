@@ -27,10 +27,28 @@ public class Usuario {
     private long tokenExpiracion;
 
     @Column(name = "activo")
-    private boolean activo;
-    
+    private Boolean activo;  // Cambiado de boolean primitivo a Boolean
+
     @Column(name = "token_confirmacion")
     private String tokenConfirmacion;
+
+    @Column(name = "confirmado")
+    private Boolean confirmado;  // Cambiado de boolean primitivo a Boolean
+
+    // Constructor por defecto (sin parámetros)
+    public Usuario() {
+    }
+
+    // Constructor con parámetros
+    public Usuario(String nombreCompleto, String correo, String telefono, String codigoPostal, String contrasena) {
+        this.nombreCompleto = nombreCompleto;
+        this.correo = correo;
+        this.telefono = telefono;
+        this.codigoPostal = codigoPostal;
+        this.contrasena = contrasena;
+        this.activo = false;  // Por defecto el usuario no está activo
+        this.confirmado = false; // Por defecto el usuario no está confirmado
+    }
 
     // Getters y Setters
     public Long getId() {
@@ -97,19 +115,27 @@ public class Usuario {
         this.tokenExpiracion = tokenExpiracion;
     }
 
-    public boolean isActivo() {
-        return activo;
+    public Boolean getActivo() {
+        return activo; 
     }
 
-    public void setActivo(boolean activo) {
+    public void setActivo(Boolean activo) {
         this.activo = activo;
     }
-    
+
     public String getTokenConfirmacion() {
         return tokenConfirmacion;
     }
 
     public void setTokenConfirmacion(String tokenConfirmacion) {
         this.tokenConfirmacion = tokenConfirmacion;
+    }
+
+    public Boolean getConfirmado() {
+        return confirmado;
+    }
+
+    public void setConfirmado(Boolean confirmado) {
+        this.confirmado = confirmado;
     }
 }
